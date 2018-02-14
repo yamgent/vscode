@@ -119,11 +119,16 @@ export class Win32UpdateService extends AbstractUpdateService {
 						});
 					}).then(packagePath => {
 						const fastUpdatesEnabled = this.configurationService.getValue<boolean>('update.enableWindowsBackgroundUpdates');
+						const userInstall = true;
 
 						this.availableUpdate = { packagePath };
 
 						if (fastUpdatesEnabled && update.supportsFastUpdate) {
-							this.setState(State.Downloaded(update));
+							if (userInstall) {
+								this.doApplyUpdate(update);
+							} else {
+								this.setState(State.Downloaded(update));
+							}
 						} else {
 							this.setState(State.Ready(update));
 						}
@@ -158,12 +163,11 @@ export class Win32UpdateService extends AbstractUpdateService {
 			);
 	}
 
-	protected doApplyUpdate(): TPromise<void> {
-		if (this.state.type !== StateType.Downloaded || !this.availableUpdate) {
+	protected doApplyUpdate(update: IUpdate): TPromise<void> {
+		if (!this.availableUpdate) {
 			return TPromise.as(null);
 		}
 
-		const update = this.state.update;
 		this.setState(State.Updating(update));
 
 		return this.cachePath.then(cachePath => {
