@@ -107,6 +107,11 @@ export class SplitView implements IDisposable {
 		container.appendChild(this.el);
 	}
 
+	splitView(view: IView, size: number, index = this.viewItems.length): void {
+		this.viewItems[index].size = this.viewItems[index].size - size;
+		this.addView(view, size, index + 1);
+	}
+
 	addView(view: IView, size: number, index = this.viewItems.length): void {
 		if (this.state !== State.Idle) {
 			throw new Error('Cant modify splitview');

@@ -58,10 +58,26 @@ class SplitPane implements IView {
 			// TODO: Splitting sizes can be a bit weird when not splitting the right-most pane
 			//       If we kept proportions when adding the view to the splitview it would be alright
 			const index = this._parent._children.indexOf(this);
-			this._parent.addChild(this._size / 2, this.orthogonalSize, instance, index + 1);
+			//(<any>this._parent._splitView).viewItems[index].size = this._size / 2;
+			this._parent.splitChild(this._size / 2, this.orthogonalSize, instance, index);
 		} else {
 			this.branch(this._container, this.orientation, instance);
 		}
+	}
+
+	private splitChild(size: number, orthogonalSize: number, instance: ITerminalInstance, index?: number, needsReattach?: boolean): void {
+		const child = new SplitPane(this, orthogonalSize, needsReattach);
+		child.orientation = this.orientation;
+		child.instance = instance;
+		this._splitView.splitChild(child, size, index);
+
+		if (typeof index === 'number') {
+			this._children.splice(index, 0, child);
+		} else {
+			this._children.push(child);
+		}
+
+		this._onDidChange = anyEvent(...this._children.map(c => c.onDidChange));
 	}
 
 	private addChild(size: number, orthogonalSize: number, instance: ITerminalInstance, index?: number, needsReattach?: boolean): void {
