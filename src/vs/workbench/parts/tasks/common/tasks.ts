@@ -13,15 +13,61 @@ import { IExtensionDescription } from 'vs/workbench/services/extensions/common/e
 import { ProblemMatcher } from 'vs/workbench/parts/tasks/common/problemMatcher';
 import { IWorkspaceFolder } from 'vs/platform/workspace/common/workspace';
 
+
+export enum ShellQuoteDefaults {
+	/**
+	 * Default is character escaping.
+	 */
+	escape = 1,
+
+	/**
+	 * Default is strong quoting
+	 */
+	strong = 2,
+
+	/**
+	 * Default is weak quoting.
+	 */
+	weak = 3
+}
+
+export interface ShellQuotes {
+	/**
+	 * The default shell quoting method to use.
+	 */
+	default: ShellQuoteDefaults;
+
+	/**
+	 * The character used to do character escaping.
+	 */
+	escape?: string;
+
+	/**
+	 * The character used for string quoting.
+	 */
+	strong?: string;
+
+	/**
+	 * The character used for weak quoting.
+	 */
+	weak?: string;
+}
+
 export interface ShellConfiguration {
 	/**
 	 * The shell executable.
 	 */
 	executable: string;
+
 	/**
 	 * The arguments to be passed to the shell executable.
 	 */
 	args?: string[];
+
+	/**
+	 * Which kind of quotes the shell supports.
+	 */
+	quotes?: ShellQuotes;
 }
 
 export interface CommandOptions {
@@ -155,6 +201,15 @@ export namespace RuntimeType {
 	}
 }
 
+export enum ShellQuoting {
+	default = 0,
+	escape = 1,
+	strong = 2,
+	weak = 3
+}
+
+export type ShellCommandArgument = string | { value: string, quoting: ShellQuoting };
+
 export interface CommandConfiguration {
 
 	/**
@@ -175,7 +230,7 @@ export interface CommandConfiguration {
 	/**
 	 * Command arguments.
 	 */
-	args?: string[];
+	args?: ShellCommandArgument[];
 
 	/**
 	 * The task selector if needed.

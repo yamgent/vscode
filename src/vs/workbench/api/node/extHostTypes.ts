@@ -1341,6 +1341,62 @@ export class ShellExecution implements vscode.ShellExecution {
 	}
 }
 
+export enum ShellQuoting {
+	default = 0,
+	escape = 1,
+	strong = 2,
+	weak = 3
+}
+
+export enum ShellQuoteDefaults {
+	escape = 1,
+	strong = 2,
+	weak = 3
+}
+
+export class ShellCommandExecution implements vscode.ShellCommandExecution {
+
+	private _command: string;
+	private _args: vscode.ShellCommandArgument[];
+	private _options: vscode.ShellExecutionOptions;
+
+	constructor(command: string, args?: vscode.ShellCommandArgument[], options?: vscode.ShellExecutionOptions) {
+		if (typeof command !== 'string') {
+			throw illegalArgument('command');
+		}
+		this._command = command;
+		this._args = args || [];
+		this._options = options;
+	}
+
+	get command(): string {
+		return this._command;
+	}
+
+	set command(value: string) {
+		if (typeof value !== 'string') {
+			throw illegalArgument('command');
+		}
+		this._command = value;
+	}
+
+	get args(): vscode.ShellCommandArgument[] {
+		return this._args;
+	}
+
+	set args(value: vscode.ShellCommandArgument[]) {
+		this._args = value || [];
+	}
+
+	get options(): vscode.ShellExecutionOptions {
+		return this._options;
+	}
+
+	set options(value: vscode.ShellExecutionOptions) {
+		this._options = value;
+	}
+}
+
 export enum TaskScope {
 	Global = 1,
 	Workspace = 2

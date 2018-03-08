@@ -4332,6 +4332,85 @@ declare module 'vscode' {
 		options?: ProcessExecutionOptions;
 	}
 
+
+	/**
+	 * Defines how an argument should be quoted if it contains
+	 * spaces or unsuppoerted characters.
+	 */
+	export enum ShellQuoting {
+
+		/**
+		 * Uses the default qouting style of the shell to be used to
+		 * execute the task. This for example is string quoting using
+		 * " for Windows cmd and string quoting using ' for bash and
+		 * PowerShell.
+		 */
+		default = 0,
+
+		/**
+		 * Character escaping should be used. This for example
+		 * uses \ on bash and ` on PowerShell.
+		 */
+		escape = 1,
+
+		/**
+		 * Strong string quoting should be used. This for example
+		 * uses " for Windows cmd and ' for bash and PowerShell.
+		 */
+		strong = 2,
+
+		/**
+		 * Weak string quoting should be used. This for example
+		 * uses " for Windows cmd, bash and PowerShell.
+		 */
+		weak = 3
+	}
+
+	/**
+	 * Possible Shell quote defaults
+	 */
+	export enum ShellQuoteDefaults {
+		/**
+		 * Default is character escaping.
+		 */
+		escape = 1,
+
+		/**
+		 * Default is strong quoting
+		 */
+		strong = 2,
+
+		/**
+		 * Default is weak quoting.
+		 */
+		weak = 3
+	}
+
+	/**
+	 * The shell quote options.
+	 */
+	export interface ShellQuoteOptions {
+		/**
+		 * The default shell quoting method to use.
+		 */
+		default: ShellQuoteDefaults;
+
+		/**
+		 * The character used to do character escaping.
+		 */
+		escape?: string;
+
+		/**
+		 * The character used for string quoting.
+		 */
+		strong?: string;
+
+		/**
+		 * The character used for weak quoting.
+		 */
+		weak?: string;
+	}
+
 	/**
 	 * Options for a shell execution
 	 */
@@ -4347,6 +4426,11 @@ declare module 'vscode' {
 		shellArgs?: string[];
 
 		/**
+		 * The shell quotes supported by this shell.
+		 */
+		shellQuotes?: ShellQuoteOptions;
+
+		/**
 		 * The current working directory of the executed shell.
 		 * If omitted the tools current workspace root is used.
 		 */
@@ -4360,10 +4444,11 @@ declare module 'vscode' {
 		env?: { [key: string]: string };
 	}
 
+	export type ShellCommandArgument = string | { value: string, quoting: ShellQuoting };
 
 	export class ShellExecution {
 		/**
-		 * Creates a process execution.
+		 * Creates a shell execution with a full command line.
 		 *
 		 * @param commandLine The command line to execute.
 		 * @param options Optional options for the started the shell.
@@ -4374,6 +4459,37 @@ declare module 'vscode' {
 		 * The shell command line
 		 */
 		commandLine: string;
+
+		/**
+		 * The shell options used when the command line is executed in a shell.
+		 * Defaults to undefined.
+		 */
+		options?: ShellExecutionOptions;
+	}
+
+	export class ShellCommandExecution {
+
+		/**
+		 * Creates a shell execution with a command and arguments. For the real execution VS Code will
+		 * construct a command line from the command and the argumens. This is subject to interpretation
+		 * especially when it comes to quoting. If full control over the command line is needed please
+		 * use `ShellExecution`.
+		 *
+		 * @param command The command to execute.
+		 * @param args The command arguments.
+		 * @param options Optional options for the started the shell.
+		 */
+		constructor(command: string, args?: ShellCommandArgument[], options?: ShellExecutionOptions);
+
+		/**
+		 * The shell command;
+		 */
+		command: string;
+
+		/**
+		 * The command arguments. Defaults to an empty array.
+		 */
+		args: ShellCommandArgument[];
 
 		/**
 		 * The shell options used when the command line is executed in a shell.
@@ -4415,7 +4531,7 @@ declare module 'vscode' {
 		 *  or '$eslint'. Problem matchers can be contributed by an extension using
 		 *  the `problemMatchers` extension point.
 		 */
-		constructor(taskDefinition: TaskDefinition, name: string, source: string, execution?: ProcessExecution | ShellExecution, problemMatchers?: string | string[]);
+		constructor(taskDefinition: TaskDefinition, name: string, source: string, execution?: ProcessExecution | ShellExecution | ShellCommandExecution, problemMatchers?: string | string[]);
 
 		/**
 		 * Creates a new task.
@@ -4449,7 +4565,7 @@ declare module 'vscode' {
 		/**
 		 * The task's execution engine
 		 */
-		execution: ProcessExecution | ShellExecution;
+		execution: ProcessExecution | ShellExecution | ShellCommandExecution;
 
 		/**
 		 * Whether the task is a background task or not.
