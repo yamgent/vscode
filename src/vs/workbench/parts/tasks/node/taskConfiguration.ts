@@ -1440,17 +1440,6 @@ namespace TaskParser {
 				if (customTask) {
 					CustomTask.fillGlobals(customTask, globals);
 					CustomTask.fillDefaults(customTask, context);
-					if (context.engine === Tasks.ExecutionEngine.Terminal && customTask.command && customTask.command.name && customTask.command.runtime === Tasks.RuntimeType.Shell && customTask.command.args && customTask.command.args.length > 0) {
-						if (customTask.command.args.some(hasUnescapedSpaces)) {
-							context.problemReporter.warn(
-								nls.localize(
-									'taskConfiguration.shellArgs',
-									'Warning: the task \'{0}\' is a shell command and one of its arguments might have unescaped spaces. To ensure correct command line quoting please merge args into the command.',
-									customTask.name
-								)
-							);
-						}
-					}
 					if (schema2_0_0) {
 						if ((customTask.command === void 0 || customTask.command.name === void 0) && (customTask.dependsOn === void 0 || customTask.dependsOn.length === 0)) {
 							context.problemReporter.error(nls.localize(
@@ -1528,23 +1517,6 @@ namespace TaskParser {
 			target = newTarget;
 		}
 		return target;
-	}
-
-	function hasUnescapedSpaces(this: void, value: string): boolean {
-		let escapeChar = Platform.isWindows ? '`' : '\\';
-
-		if (value.length >= 2 && ((value.charAt(0) === '"' && value.charAt(value.length - 1) === '"') || (value.charAt(0) === '\'' && value.charAt(value.length - 1) === '\''))) {
-			return false;
-		}
-		for (let i = 0; i < value.length; i++) {
-			let ch = value.charAt(i);
-			if (ch === ' ') {
-				if (i === 0 || value.charAt(i - 1) !== escapeChar) {
-					return true;
-				}
-			}
-		}
-		return false;
 	}
 }
 

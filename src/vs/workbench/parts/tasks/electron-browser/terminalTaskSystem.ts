@@ -576,7 +576,7 @@ export class TerminalTaskSystem implements ITaskSystem {
 	}
 
 	private buildShellCommandLine(shellExecutable: string, shellOptions: ShellConfiguration, command: CommandString, args: CommandString[]): string {
-		let basename = path.basename(shellExecutable).toLowerCase();
+		let basename = path.parse(shellExecutable).name.toLowerCase();
 		let shellQuoteOptions = this.getOuotingOptions(basename, shellOptions);
 
 		function needsQuotes(value: string): boolean {
@@ -600,7 +600,17 @@ export class TerminalTaskSystem implements ITaskSystem {
 			} else if (kind === ShellQuoting.weak && shellQuoteOptions.weak) {
 				return [shellQuoteOptions.weak + value + shellQuoteOptions.weak, true];
 			} else if (kind === ShellQuoting.escape && shellQuoteOptions.escape) {
-				return [value.replace(/ /g, shellQuoteOptions.escape + ' '), true];
+				if (Types.isString(shellQuoteOptions.escape)) {
+					return [value.replace(/ /g, shellQuoteOptions.escape + ' '), true];
+				} else {
+					let buffer: string[] = [];
+					for (let ch of shellQuoteOptions.escape.chars) {
+						buffer.push(`\\${ch}`);
+					}
+					let regexp: RegExp = new RegExp('[' + buffer.join(',') + ']', 'g');
+					let escapeChar = shellQuoteOptions.escape.value;
+					return [value.replace(regexp, (match) => escapeChar + match), true];
+				}
 			}
 			return [value, false];
 		}
@@ -640,7 +650,7 @@ export class TerminalTaskSystem implements ITaskSystem {
 	}
 
 	private getOuotingOptions(shellBasename: string, shellOptions: ShellConfiguration): ShellQuotingOptions {
-		if (shellOptions.quoting) {
+		if (shellOptions && shellOptions.quoting) {
 			return shellOptions.quoting;
 		}
 		return TerminalTaskSystem.shellQuotes[shellBasename] || TerminalTaskSystem.osShellQuotes[process.platform];
