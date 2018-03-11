@@ -278,22 +278,12 @@ namespace CommandOptions {
 	}
 }
 
-namespace ShellQuoteDefaults {
-	export function from(value: vscode.ShellQuoteDefaults): TaskSystem.ShellQuoteDefaults {
-		if (value === void 0 || value === null) {
-			return undefined;
-		}
-		return value;
-	}
-}
-
-namespace ShellQuotes {
-	export function from(value: vscode.ShellQuoteOptions): TaskSystem.ShellQuotes {
+namespace ShellQuoteOptions {
+	export function from(value: vscode.ShellQuotingOptions): TaskSystem.ShellQuotingOptions {
 		if (value === void 0 || value === null) {
 			return undefined;
 		}
 		return {
-			default: ShellQuoteDefaults.from(value.default),
 			escape: value.escape,
 			strong: value.strong,
 			weak: value.strong
@@ -302,7 +292,7 @@ namespace ShellQuotes {
 }
 
 namespace ShellConfiguration {
-	export function from(value: { executable?: string, shellArgs?: string[], quotes?: vscode.ShellQuoteOptions }): TaskSystem.ShellConfiguration {
+	export function from(value: { executable?: string, shellArgs?: string[], quotes?: vscode.ShellQuotingOptions }): TaskSystem.ShellConfiguration {
 		if (value === void 0 || value === null || !value.executable) {
 			return undefined;
 		}
@@ -310,14 +300,14 @@ namespace ShellConfiguration {
 		let result: TaskSystem.ShellConfiguration = {
 			executable: value.executable,
 			args: Strings.from(value.shellArgs),
-			quotes: ShellQuotes.from(value.quotes)
+			quoting: ShellQuoteOptions.from(value.quotes)
 		};
 		return result;
 	}
 }
 
-namespace ShellCommandArgument {
-	export function from(value: vscode.ShellCommandArgument[]): TaskSystem.ShellCommandArgument[] {
+namespace ShellString {
+	export function from(value: vscode.ShellString[]): TaskSystem.CommandString[] {
 		if (value === void 0 || value === null) {
 			return undefined;
 		}
@@ -351,8 +341,6 @@ namespace Tasks {
 			command = getProcessCommand(execution);
 		} else if (execution instanceof types.ShellExecution) {
 			command = getShellCommand(execution);
-		} else if (execution instanceof types.ShellCommandExecution) {
-			command = getShellCommand2(execution);
 		} else {
 			return undefined;
 		}
@@ -431,34 +419,34 @@ namespace Tasks {
 	}
 
 	function getShellCommand(value: vscode.ShellExecution): TaskSystem.CommandConfiguration {
-		if (typeof value.commandLine !== 'string') {
-			return undefined;
+		if (value.args) {
+			if (typeof value.command !== 'string' && typeof value.command.value !== 'string') {
+				return undefined;
+			}
+			let result: TaskSystem.CommandConfiguration = {
+				name: value.command,
+				args: ShellString.from(value.args),
+				runtime: TaskSystem.RuntimeType.Shell,
+				presentation: undefined
+			};
+			if (value.options) {
+				result.options = CommandOptions.from(value.options);
+			}
+			return result;
+		} else {
+			if (typeof value.commandLine !== 'string') {
+				return undefined;
+			}
+			let result: TaskSystem.CommandConfiguration = {
+				name: value.commandLine,
+				runtime: TaskSystem.RuntimeType.Shell,
+				presentation: undefined
+			};
+			if (value.options) {
+				result.options = CommandOptions.from(value.options);
+			}
+			return result;
 		}
-		let result: TaskSystem.CommandConfiguration = {
-			name: value.commandLine,
-			runtime: TaskSystem.RuntimeType.Shell,
-			presentation: undefined
-		};
-		if (value.options) {
-			result.options = CommandOptions.from(value.options);
-		}
-		return result;
-	}
-
-	function getShellCommand2(value: vscode.ShellCommandExecution): TaskSystem.CommandConfiguration {
-		if (typeof value.command !== 'string') {
-			return undefined;
-		}
-		let result: TaskSystem.CommandConfiguration = {
-			name: value.command,
-			args: ShellCommandArgument.from(value.args),
-			runtime: TaskSystem.RuntimeType.Shell,
-			presentation: undefined
-		};
-		if (value.options) {
-			result.options = CommandOptions.from(value.options);
-		}
-		return result;
 	}
 }
 

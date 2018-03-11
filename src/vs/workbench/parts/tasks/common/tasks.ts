@@ -14,7 +14,7 @@ import { ProblemMatcher } from 'vs/workbench/parts/tasks/common/problemMatcher';
 import { IWorkspaceFolder } from 'vs/platform/workspace/common/workspace';
 
 
-export enum ShellQuoteDefaults {
+export enum ShellQuoting {
 	/**
 	 * Default is character escaping.
 	 */
@@ -31,16 +31,29 @@ export enum ShellQuoteDefaults {
 	weak = 3
 }
 
-export interface ShellQuotes {
-	/**
-	 * The default shell quoting method to use.
-	 */
-	default: ShellQuoteDefaults;
+export namespace ShellQuoting {
+	export function from(this: void, value: string): ShellQuoting {
+		switch (value.toLowerCase()) {
+			case 'escape':
+				return ShellQuoting.escape;
+			case 'strong':
+				return ShellQuoting.strong;
+			case 'weak':
+				return ShellQuoting.weak;
+			default:
+				return ShellQuoting.strong;
+		}
+	}
+}
 
+export interface ShellQuotingOptions {
 	/**
 	 * The character used to do character escaping.
 	 */
-	escape?: string;
+	escape?: string | {
+		value: string;
+		chars: string;
+	};
 
 	/**
 	 * The character used for string quoting.
@@ -67,7 +80,7 @@ export interface ShellConfiguration {
 	/**
 	 * Which kind of quotes the shell supports.
 	 */
-	quotes?: ShellQuotes;
+	quoting?: ShellQuotingOptions;
 }
 
 export interface CommandOptions {
@@ -109,7 +122,7 @@ export enum RevealKind {
 }
 
 export namespace RevealKind {
-	export function fromString(value: string): RevealKind {
+	export function fromString(this: void, value: string): RevealKind {
 		switch (value.toLowerCase()) {
 			case 'always':
 				return RevealKind.Always;
@@ -201,14 +214,22 @@ export namespace RuntimeType {
 	}
 }
 
-export enum ShellQuoting {
-	default = 0,
-	escape = 1,
-	strong = 2,
-	weak = 3
+export interface QuotedString {
+	value: string;
+	quoting: ShellQuoting;
 }
 
-export type ShellCommandArgument = string | { value: string, quoting: ShellQuoting };
+export type CommandString = string | QuotedString;
+
+export namespace CommandString {
+	export function value(value: CommandString): string {
+		if (Types.isString(value)) {
+			return value;
+		} else {
+			return value.value;
+		}
+	}
+}
 
 export interface CommandConfiguration {
 
@@ -220,7 +241,7 @@ export interface CommandConfiguration {
 	/**
 	 * The command to execute
 	 */
-	name: string;
+	name: CommandString;
 
 	/**
 	 * Additional command options.
@@ -230,7 +251,7 @@ export interface CommandConfiguration {
 	/**
 	 * Command arguments.
 	 */
-	args?: ShellCommandArgument[];
+	args?: CommandString[];
 
 	/**
 	 * The task selector if needed.

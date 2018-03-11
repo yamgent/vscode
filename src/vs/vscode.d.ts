@@ -4340,14 +4340,6 @@ declare module 'vscode' {
 	export enum ShellQuoting {
 
 		/**
-		 * Uses the default qouting style of the shell to be used to
-		 * execute the task. This for example is string quoting using
-		 * " for Windows cmd and string quoting using ' for bash and
-		 * PowerShell.
-		 */
-		default = 0,
-
-		/**
 		 * Character escaping should be used. This for example
 		 * uses \ on bash and ` on PowerShell.
 		 */
@@ -4367,38 +4359,19 @@ declare module 'vscode' {
 	}
 
 	/**
-	 * Possible Shell quote defaults
+	 * The shell quoting options.
 	 */
-	export enum ShellQuoteDefaults {
-		/**
-		 * Default is character escaping.
-		 */
-		escape = 1,
+	export interface ShellQuotingOptions {
 
 		/**
-		 * Default is strong quoting
+		 * The character used to do character escaping. If only the character is provided
+		 * only spaces are escaped. If a `{ value, chars }` literal is provide all provided
+		 * characters are escaped.
 		 */
-		strong = 2,
-
-		/**
-		 * Default is weak quoting.
-		 */
-		weak = 3
-	}
-
-	/**
-	 * The shell quote options.
-	 */
-	export interface ShellQuoteOptions {
-		/**
-		 * The default shell quoting method to use.
-		 */
-		default: ShellQuoteDefaults;
-
-		/**
-		 * The character used to do character escaping.
-		 */
-		escape?: string;
+		escape?: string | {
+			value: string;
+			chars: string;
+		};
 
 		/**
 		 * The character used for string quoting.
@@ -4428,7 +4401,7 @@ declare module 'vscode' {
 		/**
 		 * The shell quotes supported by this shell.
 		 */
-		shellQuotes?: ShellQuoteOptions;
+		shellQuoting?: ShellQuotingOptions;
 
 		/**
 		 * The current working directory of the executed shell.
@@ -4444,7 +4417,22 @@ declare module 'vscode' {
 		env?: { [key: string]: string };
 	}
 
-	export type ShellCommandArgument = string | { value: string, quoting: ShellQuoting };
+	/**
+	 * A string that will be quoted depending on the used shell.
+	 */
+	export interface QuotedString {
+		/**
+		 * The actual string value.
+		 */
+		value: string;
+
+		/**
+		 * The quoting style to use.
+		 */
+		quoting: ShellQuoting;
+	}
+
+	export type ShellString = string | QuotedString;
 
 	export class ShellExecution {
 		/**
@@ -4456,40 +4444,31 @@ declare module 'vscode' {
 		constructor(commandLine: string, options?: ShellExecutionOptions);
 
 		/**
-		 * The shell command line
-		 */
-		commandLine: string;
-
-		/**
-		 * The shell options used when the command line is executed in a shell.
-		 * Defaults to undefined.
-		 */
-		options?: ShellExecutionOptions;
-	}
-
-	export class ShellCommandExecution {
-
-		/**
 		 * Creates a shell execution with a command and arguments. For the real execution VS Code will
-		 * construct a command line from the command and the argumens. This is subject to interpretation
+		 * construct a command line from the command and the arguments. This is subject to interpretation
 		 * especially when it comes to quoting. If full control over the command line is needed please
-		 * use `ShellExecution`.
+		 * use the constructor that creates a `ShellExecution` with the full command line.
 		 *
 		 * @param command The command to execute.
 		 * @param args The command arguments.
 		 * @param options Optional options for the started the shell.
 		 */
-		constructor(command: string, args?: ShellCommandArgument[], options?: ShellExecutionOptions);
+		constructor(command: ShellString, args: ShellString[], options?: ShellExecutionOptions);
 
 		/**
-		 * The shell command;
+		 * The shell command line. Is `undefined` if created with a command and arguments.
 		 */
-		command: string;
+		commandLine: string;
 
 		/**
-		 * The command arguments. Defaults to an empty array.
+		 * The shell command. Is `undefined` if created with a full command line.
 		 */
-		args: ShellCommandArgument[];
+		command: ShellString;
+
+		/**
+		 * The shell args. Is `undefined` if created with a full command line.
+		 */
+		args: ShellString[];
 
 		/**
 		 * The shell options used when the command line is executed in a shell.
@@ -4531,7 +4510,7 @@ declare module 'vscode' {
 		 *  or '$eslint'. Problem matchers can be contributed by an extension using
 		 *  the `problemMatchers` extension point.
 		 */
-		constructor(taskDefinition: TaskDefinition, name: string, source: string, execution?: ProcessExecution | ShellExecution | ShellCommandExecution, problemMatchers?: string | string[]);
+		constructor(taskDefinition: TaskDefinition, name: string, source: string, execution?: ProcessExecution | ShellExecution, problemMatchers?: string | string[]);
 
 		/**
 		 * Creates a new task.
@@ -4565,7 +4544,7 @@ declare module 'vscode' {
 		/**
 		 * The task's execution engine
 		 */
-		execution: ProcessExecution | ShellExecution | ShellCommandExecution;
+		execution: ProcessExecution | ShellExecution;
 
 		/**
 		 * Whether the task is a background task or not.

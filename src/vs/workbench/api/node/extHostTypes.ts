@@ -1311,14 +1311,30 @@ export class ProcessExecution implements vscode.ProcessExecution {
 export class ShellExecution implements vscode.ShellExecution {
 
 	private _commandLine: string;
+	private _command: vscode.ShellString;
+	private _args: vscode.ShellString[];
 	private _options: vscode.ShellExecutionOptions;
 
-	constructor(commandLine: string, options?: vscode.ShellExecutionOptions) {
-		if (typeof commandLine !== 'string') {
-			throw illegalArgument('commandLine');
+	constructor(commandLine: string, options?: vscode.ShellExecutionOptions);
+	constructor(command: vscode.ShellString, args: vscode.ShellString[], options?: vscode.ShellExecutionOptions);
+	constructor(arg0: vscode.ShellString, arg1?: vscode.ShellExecutionOptions | vscode.ShellString[], arg2?: vscode.ShellExecutionOptions) {
+		if (Array.isArray(arg1)) {
+			if (!arg0) {
+				throw illegalArgument('command can\'t be undefined or null');
+			}
+			if (typeof arg0 !== 'string' && typeof arg0.value !== 'string') {
+				throw illegalArgument('command');
+			}
+			this._command = arg0;
+			this._args = arg1 as vscode.ShellString[];
+			this._options = arg2;
+		} else {
+			if (typeof arg0 !== 'string') {
+				throw illegalArgument('commandLine');
+			}
+			this._commandLine = arg0;
+			this._options = arg1;
 		}
-		this._commandLine = commandLine;
-		this._options = options;
 	}
 
 	get commandLine(): string {
@@ -1332,59 +1348,22 @@ export class ShellExecution implements vscode.ShellExecution {
 		this._commandLine = value;
 	}
 
-	get options(): vscode.ShellExecutionOptions {
-		return this._options;
-	}
-
-	set options(value: vscode.ShellExecutionOptions) {
-		this._options = value;
-	}
-}
-
-export enum ShellQuoting {
-	default = 0,
-	escape = 1,
-	strong = 2,
-	weak = 3
-}
-
-export enum ShellQuoteDefaults {
-	escape = 1,
-	strong = 2,
-	weak = 3
-}
-
-export class ShellCommandExecution implements vscode.ShellCommandExecution {
-
-	private _command: string;
-	private _args: vscode.ShellCommandArgument[];
-	private _options: vscode.ShellExecutionOptions;
-
-	constructor(command: string, args?: vscode.ShellCommandArgument[], options?: vscode.ShellExecutionOptions) {
-		if (typeof command !== 'string') {
-			throw illegalArgument('command');
-		}
-		this._command = command;
-		this._args = args || [];
-		this._options = options;
-	}
-
-	get command(): string {
+	get command(): vscode.ShellString {
 		return this._command;
 	}
 
-	set command(value: string) {
-		if (typeof value !== 'string') {
+	set command(value: vscode.ShellString) {
+		if (typeof value !== 'string' && typeof value.value !== 'string') {
 			throw illegalArgument('command');
 		}
 		this._command = value;
 	}
 
-	get args(): vscode.ShellCommandArgument[] {
+	get args(): vscode.ShellString[] {
 		return this._args;
 	}
 
-	set args(value: vscode.ShellCommandArgument[]) {
+	set args(value: vscode.ShellString[]) {
 		this._args = value || [];
 	}
 
@@ -1395,6 +1374,12 @@ export class ShellCommandExecution implements vscode.ShellCommandExecution {
 	set options(value: vscode.ShellExecutionOptions) {
 		this._options = value;
 	}
+}
+
+export enum ShellQuoting {
+	escape = 1,
+	strong = 2,
+	weak = 3
 }
 
 export enum TaskScope {
