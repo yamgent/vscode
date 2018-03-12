@@ -256,7 +256,7 @@ class WelcomePage {
 		// TODO: Check redirect links.
 		const readMoreUrl = 'https://code.visualstudio.com/docs/supporting/faq#_how-to-disable-telemetry-reporting';
 		const privacyUrl = 'https://go.microsoft.com/fwlink/?LinkID=528096';
-		this.notificationService.prompt(Severity.Info, localize('welcomePage.telemetryNotice', "Help make VS Code even better: Microsoft collects usage data, read our [privacy statement]({0}). To opt out, learn more [here]({1}).", privacyUrl, readMoreUrl), [localize('telemetryNotice.readMore', "Read More")])
+		this.notificationService.prompt(Severity.Info, localize('welcomePage.telemetryNotice', "Help make VS Code even better: Microsoft collects usage data, read our [privacy statement]({0}) and learn how to opt out [here]({1}).", privacyUrl, readMoreUrl), [localize('telemetryNotice.readMore', "Read More")])
 			.then(() => this.openerService.open(URI.parse(readMoreUrl)))
 			.then(null, console.error);
 	}
