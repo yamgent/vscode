@@ -462,7 +462,7 @@ export class TerminalTaskSystem implements ITaskSystem {
 			if (Platform.isWindows) {
 				windowsShellArgs = true;
 				let basename = path.basename(shellLaunchConfig.executable).toLowerCase();
-				if (basename === 'powershell.exe') {
+				if (basename === 'powershell.exe' || basename === 'pwsh.exe') {
 					if (!shellSpecified) {
 						toAdd.push('-Command');
 					}
