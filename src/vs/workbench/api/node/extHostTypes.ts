@@ -1311,13 +1311,13 @@ export class ProcessExecution implements vscode.ProcessExecution {
 export class ShellExecution implements vscode.ShellExecution {
 
 	private _commandLine: string;
-	private _command: vscode.ShellString;
-	private _args: vscode.ShellString[];
+	private _command: string | vscode.ShellQuotedString;
+	private _args: (string | vscode.ShellQuotedString)[];
 	private _options: vscode.ShellExecutionOptions;
 
 	constructor(commandLine: string, options?: vscode.ShellExecutionOptions);
-	constructor(command: vscode.ShellString, args: vscode.ShellString[], options?: vscode.ShellExecutionOptions);
-	constructor(arg0: vscode.ShellString, arg1?: vscode.ShellExecutionOptions | vscode.ShellString[], arg2?: vscode.ShellExecutionOptions) {
+	constructor(command: string | vscode.ShellQuotedString, args: (string | vscode.ShellQuotedString)[], options?: vscode.ShellExecutionOptions);
+	constructor(arg0: string | vscode.ShellQuotedString, arg1?: vscode.ShellExecutionOptions | (string | vscode.ShellQuotedString)[], arg2?: vscode.ShellExecutionOptions) {
 		if (Array.isArray(arg1)) {
 			if (!arg0) {
 				throw illegalArgument('command can\'t be undefined or null');
@@ -1326,7 +1326,7 @@ export class ShellExecution implements vscode.ShellExecution {
 				throw illegalArgument('command');
 			}
 			this._command = arg0;
-			this._args = arg1 as vscode.ShellString[];
+			this._args = arg1 as (string | vscode.ShellQuotedString)[];
 			this._options = arg2;
 		} else {
 			if (typeof arg0 !== 'string') {
@@ -1348,22 +1348,22 @@ export class ShellExecution implements vscode.ShellExecution {
 		this._commandLine = value;
 	}
 
-	get command(): vscode.ShellString {
+	get command(): string | vscode.ShellQuotedString {
 		return this._command;
 	}
 
-	set command(value: vscode.ShellString) {
+	set command(value: string | vscode.ShellQuotedString) {
 		if (typeof value !== 'string' && typeof value.value !== 'string') {
 			throw illegalArgument('command');
 		}
 		this._command = value;
 	}
 
-	get args(): vscode.ShellString[] {
+	get args(): (string | vscode.ShellQuotedString)[] {
 		return this._args;
 	}
 
-	set args(value: vscode.ShellString[]) {
+	set args(value: (string | vscode.ShellQuotedString)[]) {
 		this._args = value || [];
 	}
 
@@ -1377,9 +1377,9 @@ export class ShellExecution implements vscode.ShellExecution {
 }
 
 export enum ShellQuoting {
-	escape = 1,
-	strong = 2,
-	weak = 3
+	Escape = 1,
+	Strong = 2,
+	Weak = 3
 }
 
 export enum TaskScope {

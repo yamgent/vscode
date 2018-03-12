@@ -47,8 +47,8 @@ export interface ShellQuotingOptions {
 	 * The character used to do character escaping.
 	 */
 	escape?: string | {
-		value: string;
-		chars: string;
+		escapeChar: string;
+		charsToEscape: string;
 	};
 
 	/**

@@ -307,7 +307,7 @@ namespace ShellConfiguration {
 }
 
 namespace ShellString {
-	export function from(value: vscode.ShellString[]): TaskSystem.CommandString[] {
+	export function from(value: (string | vscode.ShellQuotedString)[]): TaskSystem.CommandString[] {
 		if (value === void 0 || value === null) {
 			return undefined;
 		}

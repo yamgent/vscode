@@ -18,30 +18,30 @@ export enum ShellQuoting {
 	/**
 	 * Default is character escaping.
 	 */
-	escape = 1,
+	Escape = 1,
 
 	/**
 	 * Default is strong quoting
 	 */
-	strong = 2,
+	Strong = 2,
 
 	/**
 	 * Default is weak quoting.
 	 */
-	weak = 3
+	Weak = 3
 }
 
 export namespace ShellQuoting {
 	export function from(this: void, value: string): ShellQuoting {
 		switch (value.toLowerCase()) {
 			case 'escape':
-				return ShellQuoting.escape;
+				return ShellQuoting.Escape;
 			case 'strong':
-				return ShellQuoting.strong;
+				return ShellQuoting.Strong;
 			case 'weak':
-				return ShellQuoting.weak;
+				return ShellQuoting.Weak;
 			default:
-				return ShellQuoting.strong;
+				return ShellQuoting.Strong;
 		}
 	}
 }
@@ -51,8 +51,8 @@ export interface ShellQuotingOptions {
 	 * The character used to do character escaping.
 	 */
 	escape?: string | {
-		value: string;
-		chars: string;
+		escapeChar: string;
+		charsToEscape: string;
 	};
 
 	/**

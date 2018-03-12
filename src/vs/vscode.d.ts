@@ -4332,54 +4332,34 @@ declare module 'vscode' {
 		options?: ProcessExecutionOptions;
 	}
 
-
-	/**
-	 * Defines how an argument should be quoted if it contains
-	 * spaces or unsuppoerted characters.
-	 */
-	export enum ShellQuoting {
-
-		/**
-		 * Character escaping should be used. This for example
-		 * uses \ on bash and ` on PowerShell.
-		 */
-		escape = 1,
-
-		/**
-		 * Strong string quoting should be used. This for example
-		 * uses " for Windows cmd and ' for bash and PowerShell.
-		 */
-		strong = 2,
-
-		/**
-		 * Weak string quoting should be used. This for example
-		 * uses " for Windows cmd, bash and PowerShell.
-		 */
-		weak = 3
-	}
-
 	/**
 	 * The shell quoting options.
 	 */
 	export interface ShellQuotingOptions {
 
 		/**
-		 * The character used to do character escaping. If only the character is provided
-		 * only spaces are escaped. If a `{ value, chars }` literal is provide all provided
-		 * characters are escaped.
+		 * The character used to do character escaping. If a string is provided only spaces
+		 * are escaped. If a `{ escapeChar, charsToEscape }` literal is provide all characters
+		 * in `charsToEscape` are escaped using the `escapeChar`.
 		 */
 		escape?: string | {
-			value: string;
-			chars: string;
+			/**
+			 * The escape character.
+			 */
+			escapeChar: string;
+			/**
+			 * The characters to escape.
+			 */
+			charsToEscape: string;
 		};
 
 		/**
-		 * The character used for string quoting.
+		 * The character used for strong quoting. The string's length must be 1.
 		 */
 		strong?: string;
 
 		/**
-		 * The character used for weak quoting.
+		 * The character used for weak quoting. The string's length must be 1.
 		 */
 		weak?: string;
 	}
@@ -4418,9 +4398,40 @@ declare module 'vscode' {
 	}
 
 	/**
+	 * Defines how an argument should be quoted if it contains
+	 * spaces or unsuppoerted characters.
+	 */
+	export enum ShellQuoting {
+
+		/**
+		 * Character escaping should be used. This for example
+		 * uses \ on bash and ` on PowerShell.
+		 */
+		Escape = 1,
+
+		/**
+		 * Strong string quoting should be used. This for example
+		 * uses " for Windows cmd and ' for bash and PowerShell.
+		 * Strong quoting treats arguments as literal strings.
+		 * Under PowerShell echo 'The value is $(2 * 3)' will
+		 * print `The value is $(2 * 3)`
+		 */
+		Strong = 2,
+
+		/**
+		 * Weak string quoting should be used. This for example
+		 * uses " for Windows cmd, bash and PowerShell. Weak quoting
+		 * still performs some kind of evaluation inside the quoted
+		 * string.  Under PowerShell echo "The value is $(2 * 3)"
+		 * will print `The value is 6`
+		 */
+		Weak = 3
+	}
+
+	/**
 	 * A string that will be quoted depending on the used shell.
 	 */
-	export interface QuotedString {
+	export interface ShellQuotedString {
 		/**
 		 * The actual string value.
 		 */
@@ -4431,8 +4442,6 @@ declare module 'vscode' {
 		 */
 		quoting: ShellQuoting;
 	}
-
-	export type ShellString = string | QuotedString;
 
 	export class ShellExecution {
 		/**
@@ -4453,7 +4462,7 @@ declare module 'vscode' {
 		 * @param args The command arguments.
 		 * @param options Optional options for the started the shell.
 		 */
-		constructor(command: ShellString, args: ShellString[], options?: ShellExecutionOptions);
+		constructor(command: string | ShellQuotedString, args: (string | ShellQuotedString)[], options?: ShellExecutionOptions);
 
 		/**
 		 * The shell command line. Is `undefined` if created with a command and arguments.
@@ -4463,12 +4472,12 @@ declare module 'vscode' {
 		/**
 		 * The shell command. Is `undefined` if created with a full command line.
 		 */
-		command: ShellString;
+		command: string | ShellQuotedString;
 
 		/**
 		 * The shell args. Is `undefined` if created with a full command line.
 		 */
-		args: ShellString[];
+		args: (string | ShellQuotedString)[];
 
 		/**
 		 * The shell options used when the command line is executed in a shell.

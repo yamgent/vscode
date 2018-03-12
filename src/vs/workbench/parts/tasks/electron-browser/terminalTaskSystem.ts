@@ -61,8 +61,8 @@ export class TerminalTaskSystem implements ITaskSystem {
 		},
 		'powershell': {
 			escape: {
-				value: '`',
-				chars: ` ()`
+				escapeChar: '`',
+				charsToEscape: ` ()`
 			},
 			strong: '\'',
 			weak: '"'
@@ -595,20 +595,20 @@ export class TerminalTaskSystem implements ITaskSystem {
 		}
 
 		function quote(value: string, kind: ShellQuoting): [string, boolean] {
-			if (kind === ShellQuoting.strong && shellQuoteOptions.strong) {
+			if (kind === ShellQuoting.Strong && shellQuoteOptions.strong) {
 				return [shellQuoteOptions.strong + value + shellQuoteOptions.strong, true];
-			} else if (kind === ShellQuoting.weak && shellQuoteOptions.weak) {
+			} else if (kind === ShellQuoting.Weak && shellQuoteOptions.weak) {
 				return [shellQuoteOptions.weak + value + shellQuoteOptions.weak, true];
-			} else if (kind === ShellQuoting.escape && shellQuoteOptions.escape) {
+			} else if (kind === ShellQuoting.Escape && shellQuoteOptions.escape) {
 				if (Types.isString(shellQuoteOptions.escape)) {
 					return [value.replace(/ /g, shellQuoteOptions.escape + ' '), true];
 				} else {
 					let buffer: string[] = [];
-					for (let ch of shellQuoteOptions.escape.chars) {
+					for (let ch of shellQuoteOptions.escape.charsToEscape) {
 						buffer.push(`\\${ch}`);
 					}
 					let regexp: RegExp = new RegExp('[' + buffer.join(',') + ']', 'g');
-					let escapeChar = shellQuoteOptions.escape.value;
+					let escapeChar = shellQuoteOptions.escape.escapeChar;
 					return [value.replace(regexp, (match) => escapeChar + match), true];
 				}
 			}
@@ -618,7 +618,7 @@ export class TerminalTaskSystem implements ITaskSystem {
 		function quoteIfNecessary(value: CommandString): [string, boolean] {
 			if (Types.isString(value)) {
 				if (needsQuotes(value)) {
-					return quote(value, ShellQuoting.strong);
+					return quote(value, ShellQuoting.Strong);
 				} else {
 					return [value, false];
 				}
