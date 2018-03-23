@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as stream from 'stream';
-import { TPromise } from 'vs/base/common/winjs.base';
-import { canceled } from 'vs/base/common/errors';
+import { Emitter, Event } from 'vs/base/common/event';
+import { IDebugAdapterProtocol } from 'vs/workbench/parts/debug/common/debug';
 
-export abstract class V8Protocol {
+export class DebugAdapterProtocol implements IDebugAdapterProtocol {
 
 	private static readonly TWO_CRLF = '\r\n\r\n';
 
@@ -17,22 +17,34 @@ export abstract class V8Protocol {
 	private rawData: Buffer;
 	private contentLength: number;
 
-	constructor(private id: string) {
+	protected readonly _onError: Emitter<Error>;
+	private readonly _onEvent: Emitter<DebugProtocol.Event>;
+	private readonly _onRequest: Emitter<DebugProtocol.Request>;
+
+	constructor() {
 		this.sequence = 1;
 		this.contentLength = -1;
 		this.pendingRequests = new Map<number, (e: DebugProtocol.Response) => void>();
 		this.rawData = Buffer.allocUnsafe(0);
+
+		this._onError = new Emitter<Error>();
+		this._onEvent = new Emitter<DebugProtocol.Event>();
+		this._onRequest = new Emitter<DebugProtocol.Request>();
 	}
 
-	public getId(): string {
-		return this.id;
+	public get onError(): Event<Error> {
+		return this._onError.event;
 	}
 
-	protected abstract onServerError(err: Error): void;
-	protected abstract onEvent(event: DebugProtocol.Event): void;
-	protected abstract dispatchRequest(request: DebugProtocol.Request, response: DebugProtocol.Response): void;
+	public get onEvent(): Event<DebugProtocol.Event> {
+		return this._onEvent.event;
+	}
 
-	protected connect(readable: stream.Readable, writable: stream.Writable): void {
+	public get onRequest(): Event<DebugProtocol.Request> {
+		return this._onRequest.event;
+	}
+
+	public connect(readable: stream.Readable, writable: stream.Writable): void {
 
 		this.outputStream = writable;
 
@@ -40,20 +52,6 @@ export abstract class V8Protocol {
 			this.rawData = Buffer.concat([this.rawData, data]);
 			this.handleData();
 		});
-	}
-
-	protected send<R extends DebugProtocol.Response>(command: string, args: any): TPromise<R> {
-		let errorCallback: (error: Error) => void;
-		return new TPromise<R>((completeDispatch, errorDispatch) => {
-			errorCallback = errorDispatch;
-			this.doSend(command, args, (result: R) => {
-				if (result.success) {
-					completeDispatch(result);
-				} else {
-					errorDispatch(result);
-				}
-			});
-		}, () => errorCallback(canceled()));
 	}
 
 	public sendResponse(response: DebugProtocol.Response): void {
@@ -64,7 +62,7 @@ export abstract class V8Protocol {
 		}
 	}
 
-	private doSend(command: string, args: any, clb: (result: DebugProtocol.Response) => void): void {
+	public sendRequest(command: string, args: any, clb: (result: DebugProtocol.Response) => void): void {
 
 		const request: any = {
 			command: command
@@ -89,7 +87,7 @@ export abstract class V8Protocol {
 		const json = JSON.stringify(message);
 		const length = Buffer.byteLength(json, 'utf8');
 
-		this.outputStream.write('Content-Length: ' + length.toString() + V8Protocol.TWO_CRLF, 'utf8');
+		this.outputStream.write('Content-Length: ' + length.toString() + DebugAdapterProtocol.TWO_CRLF, 'utf8');
 		this.outputStream.write(json, 'utf8');
 	}
 
@@ -107,12 +105,12 @@ export abstract class V8Protocol {
 				}
 			} else {
 				const s = this.rawData.toString('utf8', 0, this.rawData.length);
-				const idx = s.indexOf(V8Protocol.TWO_CRLF);
+				const idx = s.indexOf(DebugAdapterProtocol.TWO_CRLF);
 				if (idx !== -1) {
 					const match = /Content-Length: (\d+)/.exec(s);
 					if (match && match[1]) {
 						this.contentLength = Number(match[1]);
-						this.rawData = this.rawData.slice(idx + V8Protocol.TWO_CRLF.length);
+						this.rawData = this.rawData.slice(idx + DebugAdapterProtocol.TWO_CRLF.length);
 						continue;	// try to handle a complete message
 					}
 				}
@@ -126,7 +124,7 @@ export abstract class V8Protocol {
 			const rawData = JSON.parse(body);
 			switch (rawData.type) {
 				case 'event':
-					this.onEvent(<DebugProtocol.Event>rawData);
+					this._onEvent.fire(<DebugProtocol.Event>rawData);
 					break;
 				case 'response':
 					const response = <DebugProtocol.Response>rawData;
@@ -137,19 +135,11 @@ export abstract class V8Protocol {
 					}
 					break;
 				case 'request':
-					const request = <DebugProtocol.Request>rawData;
-					const resp: DebugProtocol.Response = {
-						type: 'response',
-						seq: 0,
-						command: request.command,
-						request_seq: request.seq,
-						success: true
-					};
-					this.dispatchRequest(request, resp);
+					this._onRequest.fire(<DebugProtocol.Request>rawData);
 					break;
 			}
 		} catch (e) {
-			this.onServerError(new Error(e.message || e));
+			this._onError.fire(new Error(e.message || e));
 		}
 	}
 }

@@ -378,6 +378,28 @@ export interface ICompound {
 	configurations: (string | { name: string, folder: string })[];
 }
 
+export interface IDebugAdapterProtocol {
+	readonly onError: Event<Error>;
+	readonly onEvent: Event<DebugProtocol.Event>;
+	readonly onRequest: Event<DebugProtocol.Request>;
+	sendResponse(response: DebugProtocol.Response): void;
+	sendRequest(command: string, args: any, clb: (result: DebugProtocol.Response) => void): void;
+}
+
+export interface IDebugAdapterProcess extends IDebugAdapterProtocol {
+
+	readonly onExit: Event<number>;
+
+	/**
+	 * start DA if necessary and connect()
+	 */
+	aquire(): TPromise<void>;
+	/**
+	 * disconnect from DA and terminate if necessary
+	 */
+	release(): TPromise<void>;
+}
+
 export interface IAdapterExecutable {
 	command?: string;
 	args?: string[];
