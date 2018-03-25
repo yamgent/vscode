@@ -26,7 +26,7 @@ import { IFileService } from 'vs/platform/files/common/files';
 import { IWorkspaceContextService, IWorkspaceFolder, WorkbenchState } from 'vs/platform/workspace/common/workspace';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { ICommandService } from 'vs/platform/commands/common/commands';
-import { IDebugConfigurationProvider, IRawAdapter, ICompound, IDebugConfiguration, IConfig, IEnvConfig, IGlobalConfig, IConfigurationManager, ILaunch, IAdapterExecutable } from 'vs/workbench/parts/debug/common/debug';
+import { IDebugConfigurationProvider, IRawAdapter, ICompound, IDebugConfiguration, IConfig, IEnvConfig, IGlobalConfig, IConfigurationManager, ILaunch, IAdapterExecutable, IDebugAdapterProvider, IDebugAdapter } from 'vs/workbench/parts/debug/common/debug';
 import { Adapter } from 'vs/workbench/parts/debug/node/debugAdapter';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { IQuickOpenService } from 'vs/platform/quickOpen/common/quickOpen';
@@ -229,6 +229,8 @@ export class ConfigurationManager implements IConfigurationManager {
 	private toDispose: IDisposable[];
 	private _onDidSelectConfigurationName = new Emitter<void>();
 	private providers: IDebugConfigurationProvider[];
+	private debugAdapterProviders: Map<string, IDebugAdapterProvider>;
+
 
 	constructor(
 		@IWorkspaceContextService private contextService: IWorkspaceContextService,
@@ -250,6 +252,7 @@ export class ConfigurationManager implements IConfigurationManager {
 		if (previousSelectedLaunch) {
 			this.selectConfiguration(previousSelectedLaunch, this.storageService.get(DEBUG_SELECTED_CONFIG_NAME_KEY, StorageScope.WORKSPACE));
 		}
+		this.debugAdapterProviders = new Map<string, IDebugAdapterProvider>();
 	}
 
 	public registerDebugConfigurationProvider(handle: number, debugConfigurationProvider: IDebugConfigurationProvider): void {
@@ -298,6 +301,18 @@ export class ConfigurationManager implements IConfigurationManager {
 			return providers[0].debugAdapterExecutable(folderUri);
 		}
 		return TPromise.as(undefined);
+	}
+
+	public registerDebugAdapterProvider(debugType: string, debugAdapterLauncher: IDebugAdapterProvider) {
+		this.debugAdapterProviders.set(debugType, debugAdapterLauncher);
+	}
+
+	public createDebugAdapter(debugType: string, ae: IAdapterExecutable): IDebugAdapter {
+		let dap = this.debugAdapterProviders.get(debugType);
+		if (!dap) {
+			dap = this.debugAdapterProviders.get('*');
+		}
+		return dap.createDebugAdapter(ae);
 	}
 
 	private registerListeners(lifecycleService: ILifecycleService): void {

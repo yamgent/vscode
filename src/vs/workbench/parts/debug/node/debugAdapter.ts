@@ -9,14 +9,15 @@ import * as nls from 'vs/nls';
 import { TPromise } from 'vs/base/common/winjs.base';
 import * as strings from 'vs/base/common/strings';
 import * as objects from 'vs/base/common/objects';
-import * as paths from 'vs/base/common/paths';
-import * as platform from 'vs/base/common/platform';
 import { IJSONSchema, IJSONSchemaSnippet } from 'vs/base/common/jsonSchema';
 import { IWorkspaceFolder } from 'vs/platform/workspace/common/workspace';
-import { IConfig, IRawAdapter, IAdapterExecutable, INTERNAL_CONSOLE_OPTIONS_SCHEMA, IConfigurationManager } from 'vs/workbench/parts/debug/common/debug';
+import { IConfig, IRawAdapter, IAdapterExecutable, INTERNAL_CONSOLE_OPTIONS_SCHEMA, IConfigurationManager, IDebugAdapter, IDebugConfiguration, IAdapterExecutableInfo } from 'vs/workbench/parts/debug/common/debug';
 import { IExtensionDescription } from 'vs/workbench/services/extensions/common/extensions';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { ICommandService } from 'vs/platform/commands/common/commands';
+import { IOutputService } from 'vs/workbench/parts/output/common/output';
+import { LocalDebugAdapter } from 'vs/workbench/parts/debug/node/v8Protocol';
+
 
 export class Adapter {
 
@@ -30,6 +31,46 @@ export class Adapter {
 	}
 
 	public hasConfigurationProvider = false;
+
+	public createDebugAdapter(root: IWorkspaceFolder, outputService: IOutputService): TPromise<IDebugAdapter> {
+		return this.getAdapterExecutable2(root).then(aei => {
+			const debugConfigs = this.configurationService.getValue<IDebugConfiguration>('debug');
+			if (debugConfigs.extensionHostDebugAdapter) {
+				return this.configurationManager.createDebugAdapter(this.rawAdapter.type, aei);
+			} else {
+				return new LocalDebugAdapter(aei, outputService);
+			}
+		});
+	}
+
+	public getAdapterExecutable2(root: IWorkspaceFolder): TPromise<IAdapterExecutableInfo> {
+
+		return this.configurationManager.debugAdapterExecutable(root ? root.uri : undefined, this.rawAdapter.type).then(adapterExecutable => {
+
+			if (adapterExecutable) {
+				return adapterExecutable;
+			}
+
+			// try deprecated command based extension API
+			if (this.rawAdapter.adapterExecutableCommand) {
+				return this.commandService.executeCommand<IAdapterExecutable>(this.rawAdapter.adapterExecutableCommand, root ? root.uri.toString() : undefined);
+			}
+
+			const aei = <IAdapterExecutableInfo>{
+				extensionFolderPath: this.extensionDescription.extensionFolderPath,
+				program: this.rawAdapter.program,
+				args: this.rawAdapter.args,
+				runtime: this.rawAdapter.runtime,
+				runtimeArgs: this.rawAdapter.runtimeArgs,
+				win: this.rawAdapter.win,
+				winx86: this.rawAdapter.winx86,
+				windows: this.rawAdapter.windows,
+				osx: this.rawAdapter.osx,
+				linux: this.rawAdapter.linux
+			};
+			return TPromise.as(aei);
+		});
+	}
 
 	public getAdapterExecutable(root: IWorkspaceFolder, verifyAgainstFS = true): TPromise<IAdapterExecutable> {
 
@@ -47,17 +88,19 @@ export class Adapter {
 			}
 
 			// fallback: executable contribution specified in package.json
-			adapterExecutable = <IAdapterExecutable>{
-				command: this.getProgram(),
-				args: this.getAttributeBasedOnPlatform('args')
+			const aei = <IAdapterExecutableInfo>{
+				extensionFolderPath: this.extensionDescription.extensionFolderPath,
+				program: this.rawAdapter.program,
+				args: this.rawAdapter.args,
+				runtime: this.rawAdapter.runtime,
+				runtimeArgs: this.rawAdapter.runtimeArgs,
+				win: this.rawAdapter.win,
+				winx86: this.rawAdapter.winx86,
+				windows: this.rawAdapter.windows,
+				osx: this.rawAdapter.osx,
+				linux: this.rawAdapter.linux
 			};
-			const runtime = this.getRuntime();
-			if (runtime) {
-				const runtimeArgs = this.getAttributeBasedOnPlatform('runtimeArgs');
-				adapterExecutable.args = (runtimeArgs || []).concat([adapterExecutable.command]).concat(adapterExecutable.args || []);
-				adapterExecutable.command = runtime;
-			}
-			return this.verifyAdapterDetails(adapterExecutable, verifyAgainstFS);
+			return this.verifyAdapterDetails(LocalDebugAdapter.platformAdapterExecutable(aei), verifyAgainstFS);
 		});
 	}
 
@@ -89,22 +132,6 @@ export class Adapter {
 
 		return TPromise.wrapError(new Error(nls.localize({ key: 'debugAdapterCannotDetermineExecutable', comment: ['Adapter executable file not found'] },
 			"Cannot determine executable for debug adapter '{0}'.", this.type)));
-	}
-
-	private getRuntime(): string {
-		let runtime = this.getAttributeBasedOnPlatform('runtime');
-		if (runtime && runtime.indexOf('./') === 0) {
-			runtime = paths.join(this.extensionDescription.extensionFolderPath, runtime);
-		}
-		return runtime;
-	}
-
-	private getProgram(): string {
-		let program = this.getAttributeBasedOnPlatform('program');
-		if (program) {
-			program = paths.join(this.extensionDescription.extensionFolderPath, program);
-		}
-		return program;
 	}
 
 	public get aiKey(): string {
@@ -247,20 +274,5 @@ export class Adapter {
 
 			return attributes;
 		});
-	}
-
-	private getAttributeBasedOnPlatform(key: string): any {
-		let result: any;
-		if (platform.isWindows && !process.env.hasOwnProperty('PROCESSOR_ARCHITEW6432') && this.rawAdapter.winx86) {
-			result = this.rawAdapter.winx86[key];
-		} else if (platform.isWindows && this.rawAdapter.win) {
-			result = this.rawAdapter.win[key];
-		} else if (platform.isMacintosh && this.rawAdapter.osx) {
-			result = this.rawAdapter.osx[key];
-		} else if (platform.isLinux && this.rawAdapter.linux) {
-			result = this.rawAdapter.linux[key];
-		}
-
-		return result || this.rawAdapter[key];
 	}
 }

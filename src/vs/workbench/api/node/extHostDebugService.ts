@@ -12,11 +12,12 @@ import {
 	IMainContext, IBreakpointsDeltaDto, ISourceMultiBreakpointDto, IFunctionBreakpointDto
 } from 'vs/workbench/api/node/extHost.protocol';
 import { ExtHostWorkspace } from 'vs/workbench/api/node/extHostWorkspace';
-
 import * as vscode from 'vscode';
 import URI, { UriComponents } from 'vs/base/common/uri';
 import { Disposable, Position, Location, SourceBreakpoint, FunctionBreakpoint } from 'vs/workbench/api/node/extHostTypes';
 import { generateUuid } from 'vs/base/common/uuid';
+import { LocalDebugAdapter } from 'vs/workbench/parts/debug/node/v8Protocol';
+import { IAdapterExecutableInfo } from 'vs/workbench/parts/debug/common/debug';
 
 
 export class ExtHostDebugService implements ExtHostDebugServiceShape {
@@ -52,6 +53,8 @@ export class ExtHostDebugService implements ExtHostDebugServiceShape {
 
 	private readonly _onDidChangeBreakpoints: Emitter<vscode.BreakpointsChangeEvent>;
 
+	private _debugAdapters: Map<number, LocalDebugAdapter>;
+
 
 	constructor(mainContext: IMainContext, workspace: ExtHostWorkspace) {
 
@@ -77,6 +80,32 @@ export class ExtHostDebugService implements ExtHostDebugServiceShape {
 
 		this._breakpoints = new Map<string, vscode.Breakpoint>();
 		this._breakpointEventsActive = false;
+
+		this._debugAdapters = new Map<number, LocalDebugAdapter>();
+	}
+
+	public $startDASession(handle: number, execConfig: IAdapterExecutableInfo): TPromise<void> {
+		const proxy = this._debugServiceProxy;
+		const da = new class extends LocalDebugAdapter {
+			public acceptMessage(message: DebugProtocol.ProtocolMessage) {
+				proxy.$acceptDAMessage(handle, message);
+			}
+		}(execConfig);
+		this._debugAdapters.set(handle, da);
+		da.onError(err => this._debugServiceProxy.$acceptDAError(handle, err));
+		da.onExit(code => this._debugServiceProxy.$acceptDAExit(handle, code, null));
+		return da.startSession();
+	}
+
+	public $sendDAMessage(handle: number, message: DebugProtocol.ProtocolMessage): TPromise<void> {
+		this._debugAdapters.get(handle).sendMessage(message);
+		return void 0;
+	}
+
+	public $stopDASession(handle: number): TPromise<void> {
+		const da = this._debugAdapters.get(handle);
+		this._debugAdapters.delete(handle);
+		return da.stopSession();
 	}
 
 	private startBreakpoints() {

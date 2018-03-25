@@ -20,6 +20,7 @@ import { Range, IRange } from 'vs/editor/common/core/range';
 import { RawContextKey, ContextKeyExpr } from 'vs/platform/contextkey/common/contextkey';
 import { IWorkspaceFolder } from 'vs/platform/workspace/common/workspace';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
+import { IDisposable } from 'vs/base/common/lifecycle';
 
 export const VIEWLET_ID = 'workbench.view.debug';
 export const VARIABLES_VIEW_ID = 'workbench.debug.variablesView';
@@ -345,6 +346,7 @@ export interface IDebugConfiguration {
 	hideActionBar: boolean;
 	showInStatusBar: 'never' | 'always' | 'onFirstSessionStart';
 	internalConsoleOptions: 'neverOpen' | 'openOnSessionStart' | 'openOnFirstSessionStart';
+	extensionHostDebugAdapter: boolean;
 }
 
 export interface IGlobalConfig {
@@ -378,31 +380,36 @@ export interface ICompound {
 	configurations: (string | { name: string, folder: string })[];
 }
 
-export interface IDebugAdapterProtocol {
+export interface IDebugAdapter extends IDisposable {
 	readonly onError: Event<Error>;
-	readonly onEvent: Event<DebugProtocol.Event>;
-	readonly onRequest: Event<DebugProtocol.Request>;
-	sendResponse(response: DebugProtocol.Response): void;
-	sendRequest(command: string, args: any, clb: (result: DebugProtocol.Response) => void): void;
-}
-
-export interface IDebugAdapterProcess extends IDebugAdapterProtocol {
-
 	readonly onExit: Event<number>;
 
-	/**
-	 * start DA if necessary and connect()
-	 */
-	aquire(): TPromise<void>;
-	/**
-	 * disconnect from DA and terminate if necessary
-	 */
-	release(): TPromise<void>;
+	startSession(): TPromise<void>;
+	// only use when forwarding protocol
+	onRequest(callback: (request: DebugProtocol.Request) => void);
+	onEvent(callback: (event: DebugProtocol.Event) => void);
+	sendMessage(message: DebugProtocol.ProtocolMessage): void;
+	sendResponse(response: DebugProtocol.Response): void;
+	sendRequest(command: string, args: any, clb: (result: DebugProtocol.Response) => void): void;
+	stopSession(): TPromise<void>;
+}
+
+export interface IDebugAdapterProvider {
+	createDebugAdapter(adapterInfo: IAdapterExecutableInfo): IDebugAdapter;
 }
 
 export interface IAdapterExecutable {
 	command?: string;
 	args?: string[];
+}
+
+export interface IAdapterExecutableInfo extends IRawEnvAdapter {
+	extensionFolderPath?: string;
+	win?: IRawEnvAdapter;
+	winx86?: IRawEnvAdapter;
+	windows?: IRawEnvAdapter;
+	osx?: IRawEnvAdapter;
+	linux?: IRawEnvAdapter;
 }
 
 export interface IRawEnvAdapter {
@@ -468,6 +475,9 @@ export interface IConfigurationManager {
 
 	resolveConfigurationByProviders(folderUri: uri | undefined, type: string | undefined, debugConfiguration: any): TPromise<any>;
 	debugAdapterExecutable(folderUri: uri | undefined, type: string): TPromise<IAdapterExecutable | undefined>;
+
+	registerDebugAdapterProvider(debugType: string, debugAdapterLauncher: IDebugAdapterProvider);
+	createDebugAdapter(debugType: string, adapterExecutableInfo: IAdapterExecutableInfo): IDebugAdapter;
 }
 
 export interface ILaunch {

@@ -3,62 +3,75 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as cp from 'child_process';
 import * as stream from 'stream';
+import * as nls from 'vs/nls';
+import * as paths from 'vs/base/common/paths';
+import * as debug from 'vs/workbench/parts/debug/common/debug';
+import * as platform from 'vs/base/common/platform';
+import * as stdfork from 'vs/base/node/stdFork';
 import { Emitter, Event } from 'vs/base/common/event';
-import { IDebugAdapterProtocol } from 'vs/workbench/parts/debug/common/debug';
+import { TPromise } from 'vs/base/common/winjs.base';
+import { ExtensionsChannelId } from 'vs/platform/extensionManagement/common/extensionManagement';
+import { IOutputService } from 'vs/workbench/parts/output/common/output';
 
-export class DebugAdapterProtocol implements IDebugAdapterProtocol {
+/**
+ * Abstract implementation of the low level API for a debug adapter.
+ * Missing is how this API communicates with the debug adapter.
+ */
+export abstract class AbstractDebugAdapter implements debug.IDebugAdapter {
 
-	private static readonly TWO_CRLF = '\r\n\r\n';
-
-	private outputStream: stream.Writable;
 	private sequence: number;
 	private pendingRequests: Map<number, (e: DebugProtocol.Response) => void>;
-	private rawData: Buffer;
-	private contentLength: number;
+	private requestCallback: (request: DebugProtocol.Request) => void;
+	private eventCallback: (request: DebugProtocol.Event) => void;
 
 	protected readonly _onError: Emitter<Error>;
-	private readonly _onEvent: Emitter<DebugProtocol.Event>;
-	private readonly _onRequest: Emitter<DebugProtocol.Request>;
+	protected readonly _onExit: Emitter<number>;
 
 	constructor() {
 		this.sequence = 1;
-		this.contentLength = -1;
 		this.pendingRequests = new Map<number, (e: DebugProtocol.Response) => void>();
-		this.rawData = Buffer.allocUnsafe(0);
 
 		this._onError = new Emitter<Error>();
-		this._onEvent = new Emitter<DebugProtocol.Event>();
-		this._onRequest = new Emitter<DebugProtocol.Request>();
+		this._onExit = new Emitter<number>();
 	}
+
+	abstract startSession(): TPromise<void>;
+	abstract stopSession(): TPromise<void>;
+
+	public dispose(): void {
+	}
+
+	abstract sendMessage(message: DebugProtocol.ProtocolMessage): void;
 
 	public get onError(): Event<Error> {
 		return this._onError.event;
 	}
 
-	public get onEvent(): Event<DebugProtocol.Event> {
-		return this._onEvent.event;
+	public get onExit(): Event<number> {
+		return this._onExit.event;
 	}
 
-	public get onRequest(): Event<DebugProtocol.Request> {
-		return this._onRequest.event;
+	public onEvent(callback: (event: DebugProtocol.Event) => void) {
+		if (this.eventCallback) {
+			this._onError.fire(new Error(`attempt to set more than one 'Event' callback`));
+		}
+		this.eventCallback = callback;
 	}
 
-	public connect(readable: stream.Readable, writable: stream.Writable): void {
-
-		this.outputStream = writable;
-
-		readable.on('data', (data: Buffer) => {
-			this.rawData = Buffer.concat([this.rawData, data]);
-			this.handleData();
-		});
+	public onRequest(callback: (request: DebugProtocol.Request) => void) {
+		if (this.requestCallback) {
+			this._onError.fire(new Error(`attempt to set more than one 'Request' callback`));
+		}
+		this.requestCallback = callback;
 	}
 
 	public sendResponse(response: DebugProtocol.Response): void {
 		if (response.seq > 0) {
-			console.error(`attempt to send more than one response for command ${response.command}`);
+			this._onError.fire(new Error(`attempt to send more than one response for command ${response.command}`));
 		} else {
-			this.sendMessage('response', response);
+			this.internalSend('response', response);
 		}
 	}
 
@@ -71,7 +84,7 @@ export class DebugAdapterProtocol implements IDebugAdapterProtocol {
 			request.arguments = args;
 		}
 
-		this.sendMessage('request', request);
+		this.internalSend('request', request);
 
 		if (clb) {
 			// store callback for this request
@@ -79,19 +92,85 @@ export class DebugAdapterProtocol implements IDebugAdapterProtocol {
 		}
 	}
 
-	private sendMessage(typ: 'request' | 'response' | 'event', message: DebugProtocol.ProtocolMessage): void {
+	public acceptMessage(message: DebugProtocol.ProtocolMessage) {
+		switch (message.type) {
+			case 'event':
+				if (this.eventCallback) {
+					this.eventCallback(<DebugProtocol.Event>message);
+				}
+				break;
+			case 'request':
+				if (this.requestCallback) {
+					this.requestCallback(<DebugProtocol.Request>message);
+				}
+				break;
+			case 'response':
+				const response = <DebugProtocol.Response>message;
+				const clb = this.pendingRequests.get(response.request_seq);
+				if (clb) {
+					this.pendingRequests.delete(response.request_seq);
+					clb(response);
+				}
+				break;
+		}
+	}
+
+	private internalSend(typ: 'request' | 'response' | 'event', message: DebugProtocol.ProtocolMessage): void {
 
 		message.type = typ;
 		message.seq = this.sequence++;
 
-		const json = JSON.stringify(message);
-		const length = Buffer.byteLength(json, 'utf8');
+		this.sendMessage(message);
+	}
+}
 
-		this.outputStream.write('Content-Length: ' + length.toString() + DebugAdapterProtocol.TWO_CRLF, 'utf8');
-		this.outputStream.write(json, 'utf8');
+/**
+ * An implementation that communicates via two streams with the debug adapter.
+ */
+export abstract class StreamDebugAdapter extends AbstractDebugAdapter {
+
+	private static readonly TWO_CRLF = '\r\n\r\n';
+
+	private outputStream: stream.Writable;
+	private rawData: Buffer;
+	private contentLength: number;
+
+	constructor() {
+		super();
 	}
 
-	private handleData(): void {
+	public connect(readable: stream.Readable, writable: stream.Writable): void {
+
+		this.outputStream = writable;
+		this.rawData = Buffer.allocUnsafe(0);
+		this.contentLength = -1;
+
+		readable.on('data', (data: Buffer) => this.handleData(data));
+
+		// readable.on('close', () => {
+		// 	this._emitEvent(new Event('close'));
+		// });
+		// readable.on('error', (error) => {
+		// 	this._emitEvent(new Event('error', 'readable error: ' + (error && error.message)));
+		// });
+
+		// writable.on('error', (error) => {
+		// 	this._emitEvent(new Event('error', 'writable error: ' + (error && error.message)));
+		// });
+	}
+
+	public sendMessage(message: DebugProtocol.ProtocolMessage): void {
+
+		if (this.outputStream) {
+			const json = JSON.stringify(message);
+			this.outputStream.write(`Content-Length: ${Buffer.byteLength(json, 'utf8')}${StreamDebugAdapter.TWO_CRLF}${json}`, 'utf8');
+		}
+	}
+
+	private handleData(data: Buffer): void {
+
+		this.rawData = Buffer.concat([this.rawData, data]);
+
 		while (true) {
 			if (this.contentLength >= 0) {
 				if (this.rawData.length >= this.contentLength) {
@@ -99,47 +178,147 @@ export class DebugAdapterProtocol implements IDebugAdapterProtocol {
 					this.rawData = this.rawData.slice(this.contentLength);
 					this.contentLength = -1;
 					if (message.length > 0) {
-						this.dispatch(message);
+						try {
+							this.acceptMessage(<DebugProtocol.ProtocolMessage>JSON.parse(message));
+						} catch (e) {
+							this._onError.fire(new Error(e.message || e));
+						}
 					}
 					continue;	// there may be more complete messages to process
 				}
 			} else {
-				const s = this.rawData.toString('utf8', 0, this.rawData.length);
-				const idx = s.indexOf(DebugAdapterProtocol.TWO_CRLF);
+				const idx = this.rawData.indexOf(StreamDebugAdapter.TWO_CRLF);
 				if (idx !== -1) {
-					const match = /Content-Length: (\d+)/.exec(s);
-					if (match && match[1]) {
-						this.contentLength = Number(match[1]);
-						this.rawData = this.rawData.slice(idx + DebugAdapterProtocol.TWO_CRLF.length);
-						continue;	// try to handle a complete message
+					const header = this.rawData.toString('utf8', 0, idx);
+					const lines = header.split('\r\n');
+					for (const h of lines) {
+						const kvPair = h.split(/: +/);
+						if (kvPair[0] === 'Content-Length') {
+							this.contentLength = Number(kvPair[1]);
+						}
 					}
+					this.rawData = this.rawData.slice(idx + StreamDebugAdapter.TWO_CRLF.length);
+					continue;
 				}
 			}
 			break;
 		}
 	}
+}
 
-	private dispatch(body: string): void {
-		try {
-			const rawData = JSON.parse(body);
-			switch (rawData.type) {
-				case 'event':
-					this._onEvent.fire(<DebugProtocol.Event>rawData);
-					break;
-				case 'response':
-					const response = <DebugProtocol.Response>rawData;
-					const clb = this.pendingRequests.get(response.request_seq);
-					if (clb) {
-						this.pendingRequests.delete(response.request_seq);
-						clb(response);
-					}
-					break;
-				case 'request':
-					this._onRequest.fire(<DebugProtocol.Request>rawData);
-					break;
+/**
+ * An implementation that launches the debug adapter as a separate process and communicates via stdin/stdout.
+ * Used for launching DA in VS Code ("classic" way) and in EH (new way).
+ */
+export class LocalDebugAdapter extends StreamDebugAdapter {
+
+	private executable: debug.IAdapterExecutable;
+	private serverProcess: cp.ChildProcess;
+
+	static platformAdapterExecutable(adapterInfo: debug.IAdapterExecutableInfo): debug.IAdapterExecutable {
+
+		const adapterExecutable = <debug.IAdapterExecutable>{
+			command: this.getProgram(adapterInfo),
+			args: this.getAttributeBasedOnPlatform(adapterInfo, 'args')
+		};
+		const runtime = this.getRuntime(adapterInfo);
+		if (runtime) {
+			const runtimeArgs = this.getAttributeBasedOnPlatform(adapterInfo, 'runtimeArgs');
+			adapterExecutable.args = (runtimeArgs || []).concat([adapterExecutable.command]).concat(adapterExecutable.args || []);
+			adapterExecutable.command = runtime;
+		}
+		return adapterExecutable;
+	}
+
+	private static getRuntime(adapterInfo: debug.IAdapterExecutableInfo): string {
+		let runtime = this.getAttributeBasedOnPlatform(adapterInfo, 'runtime');
+		if (runtime && runtime.indexOf('./') === 0) {
+			runtime = paths.join(adapterInfo.extensionFolderPath, runtime);
+		}
+		return runtime;
+	}
+
+	private static getProgram(adapterInfo: debug.IAdapterExecutableInfo): string {
+		let program = this.getAttributeBasedOnPlatform(adapterInfo, 'program');
+		if (program) {
+			program = paths.join(adapterInfo.extensionFolderPath, program);
+		}
+		return program;
+	}
+
+	private static getAttributeBasedOnPlatform(adapterInfo: debug.IAdapterExecutableInfo, key: string): any {
+		let result: any;
+		if (platform.isWindows && !process.env.hasOwnProperty('PROCESSOR_ARCHITEW6432') && adapterInfo.winx86) {
+			result = adapterInfo.winx86[key];
+		} else if (platform.isWindows && adapterInfo.win) {
+			result = adapterInfo.win[key];
+		} else if (platform.isMacintosh && adapterInfo.osx) {
+			result = adapterInfo.osx[key];
+		} else if (platform.isLinux && adapterInfo.linux) {
+			result = adapterInfo.linux[key];
+		}
+		return result || adapterInfo[key];
+	}
+
+	constructor(executableInfo: debug.IAdapterExecutableInfo, private outputService?: IOutputService) {
+		super();
+		this.executable = LocalDebugAdapter.platformAdapterExecutable(executableInfo);
+	}
+
+	startSession(): TPromise<void> {
+		return new TPromise<void>((c, e) => {
+			if (this.executable.command === 'node' /*&& this.outputService*/) {
+				if (Array.isArray(this.executable.args) && this.executable.args.length > 0) {
+					stdfork.fork(this.executable.args[0], this.executable.args.slice(1), {}, (err, child) => {
+						if (err) {
+							e(new Error(nls.localize('unableToLaunchDebugAdapter', "Unable to launch debug adapter from '{0}'.", this.executable.args[0])));
+						}
+						this.serverProcess = child;
+						c(null);
+					});
+				} else {
+					e(new Error(nls.localize('unableToLaunchDebugAdapterNoArgs', "Unable to launch debug adapter.")));
+				}
+			} else {
+				this.serverProcess = cp.spawn(this.executable.command, this.executable.args);
+				c(null);
 			}
-		} catch (e) {
-			this._onError.fire(new Error(e.message || e));
+		}).then(_ => {
+			this.serverProcess.on('error', (err: Error) => this._onError.fire(err));
+			this.serverProcess.on('exit', (code: number, signal: string) => this._onExit.fire(code));
+
+			if (this.outputService) {
+				const sanitize = (s: string) => s.toString().replace(/\r?\n$/mg, '');
+				// this.serverProcess.stdout.on('data', (data: string) => {
+				// 	console.log('%c' + sanitize(data), 'background: #ddd; font-style: italic;');
+				// });
+				this.serverProcess.stderr.on('data', (data: string) => {
+					this.outputService.getChannel(ExtensionsChannelId).append(sanitize(data));
+				});
+			}
+
+			this.connect(this.serverProcess.stdout, this.serverProcess.stdin);
+		});
+	}
+
+	stopSession(): TPromise<void> {
+
+		// when killing a process in windows its child
+		// processes are *not* killed but become root
+		// processes. Therefore we use TASKKILL.EXE
+		if (platform.isWindows) {
+			return new TPromise<void>((c, e) => {
+				const killer = cp.exec(`taskkill /F /T /PID ${this.serverProcess.pid}`, function (err, stdout, stderr) {
+					if (err) {
+						return e(err);
+					}
+				});
+				killer.on('exit', c);
+				killer.on('error', e);
+			});
+		} else {
+			this.serverProcess.kill('SIGTERM');
+			return TPromise.as(null);
 		}
 	}
 }
