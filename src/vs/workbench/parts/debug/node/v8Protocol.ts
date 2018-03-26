@@ -181,7 +181,7 @@ export abstract class StreamDebugAdapter extends AbstractDebugAdapter {
 						try {
 							this.acceptMessage(<DebugProtocol.ProtocolMessage>JSON.parse(message));
 						} catch (e) {
-							this._onError.fire(new Error(e.message || e));
+							this._onError.fire(new Error((e.message || e) + '\n' + message));
 						}
 					}
 					continue;	// there may be more complete messages to process
