@@ -52,6 +52,7 @@ export const REVEAL_IN_OS_LABEL = isWindows ? nls.localize('revealInWindows', "R
 export const REVEAL_IN_EXPLORER_COMMAND_ID = 'revealInExplorer';
 export const REVERT_FILE_COMMAND_ID = 'workbench.action.files.revert';
 export const OPEN_TO_SIDE_COMMAND_ID = 'explorer.openToSide';
+export const HELLO_WORLD_COMMAND_ID = 'explorer.helloWorld';
 export const SELECT_FOR_COMPARE_COMMAND_ID = 'selectForCompare';
 
 export const COMPARE_SELECTED_COMMAND_ID = 'compareSelected';
@@ -229,6 +230,14 @@ CommandsRegistry.registerCommand({
 			});
 		}
 
+		return TPromise.as(true);
+	}
+});
+
+CommandsRegistry.registerCommand({
+	id: HELLO_WORLD_COMMAND_ID, handler: (accessor, resource: URI | object) => {
+		const notificationService = accessor.get(INotificationService);
+		notificationService.info('Hello World!');
 		return TPromise.as(true);
 	}
 });
